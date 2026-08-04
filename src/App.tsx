@@ -1,14 +1,10 @@
 import classNames from 'classnames';
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import type { ChangeEvent, FC, FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { FC } from 'react';
 import { createTodo, deleteTodo, getTodos, USER_ID } from './api/todos';
 import { ErrorNotification } from './components/ErrorNotification';
+import { NewTodo } from './components/NewTodo';
+import type { NewTodoHandle } from './components/NewTodo';
 import { FilterStatus, TodoFilter } from './components/TodoFilter';
 import { TodoList } from './components/TodoList';
 import type { Todo } from './types/Todo';
@@ -36,13 +32,12 @@ function getVisibleTodos(todos: Todo[], status: FilterStatus): Todo[] {
 export const App: FC = () => {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [selectedStatus, setSelectedStatus] = useState(FilterStatus.All);
-  const [title, setTitle] = useState('');
   const [tempTodo, setTempTodo] = useState<Todo | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [processingTodoIds, setProcessingTodoIds] = useState<number[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
   const [errorVersion, setErrorVersion] = useState(0);
-  const newTodoFieldRef = useRef<HTMLInputElement>(null);
+  const newTodoRef = useRef<NewTodoHandle>(null);
 
   const hideError = useCallback(() => {
     setErrorMessage('');
@@ -54,7 +49,7 @@ export const App: FC = () => {
   }, []);
 
   const focusNewTodoField = useCallback(() => {
-    newTodoFieldRef.current?.focus();
+    newTodoRef.current?.focus();
   }, []);
 
   useEffect(() => {
@@ -95,12 +90,6 @@ export const App: FC = () => {
     return () => window.clearTimeout(timeoutId);
   }, [errorMessage, errorVersion]);
 
-  useEffect(() => {
-    if (!isAdding) {
-      focusNewTodoField();
-    }
-  }, [focusNewTodoField, isAdding]);
-
   const visibleTodos = useMemo(
     () => getVisibleTodos(todos, selectedStatus),
     [todos, selectedStatus],
@@ -127,21 +116,20 @@ export const App: FC = () => {
     );
   };
 
-  const handleTitleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setTitle(event.target.value);
+  const handleEmptyTitle = () => {
+    hideError();
+    showError(EMPTY_TITLE_ERROR_MESSAGE);
   };
 
-  const handleNewTodoSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleAddTodo = async (title: string): Promise<boolean> => {
     hideError();
 
     const trimmedTitle = title.trim();
 
     if (!trimmedTitle) {
       showError(EMPTY_TITLE_ERROR_MESSAGE);
-      focusNewTodoField();
 
-      return;
+      return false;
     }
 
     const newTodo: Omit<Todo, 'id'> = {
@@ -157,9 +145,12 @@ export const App: FC = () => {
       const createdTodo = await createTodo(newTodo);
 
       setTodos(currentTodos => [...currentTodos, createdTodo]);
-      setTitle('');
+
+      return true;
     } catch {
       showError(ADD_ERROR_MESSAGE);
+
+      return false;
     } finally {
       setTempTodo(null);
       setIsAdding(false);
@@ -172,9 +163,7 @@ export const App: FC = () => {
 
     try {
       await deleteTodo(todoId);
-      setTodos(currentTodos =>
-        currentTodos.filter(todo => todo.id !== todoId),
-      );
+      setTodos(currentTodos => currentTodos.filter(todo => todo.id !== todoId));
     } catch {
       showError(DELETE_ERROR_MESSAGE);
     } finally {
@@ -216,17 +205,37 @@ export const App: FC = () => {
     focusNewTodoField();
   };
 
+  const handleToggleAll = () => {
+    const nextCompletedStatus = !allTodosCompleted;
+
+    setTodos(currentTodos =>
+      currentTodos.map(todo => ({
+        ...todo,
+        completed: nextCompletedStatus,
+      })),
+    );
+  };
+
   if (!USER_ID) {
     return <UserWarning />;
   }
+
+  const newTodo = (
+    <NewTodo
+      ref={newTodoRef}
+      isAdding={isAdding}
+      onAdd={handleAddTodo}
+      onEmptyTitle={handleEmptyTitle}
+    />
+  );
 
   return (
     <div className="todoapp">
       <h1 className="todoapp__title">todos</h1>
 
       <div className="todoapp__content">
-        <header className="todoapp__header">
-          {todos.length > 0 && (
+        {todos.length > 0 ? (
+          <header className="todoapp__header">
             <button
               type="button"
               className={classNames('todoapp__toggle-all', {
@@ -234,23 +243,14 @@ export const App: FC = () => {
               })}
               data-cy="ToggleAllButton"
               aria-label="Toggle all todos"
+              onClick={handleToggleAll}
             />
-          )}
 
-          <form onSubmit={handleNewTodoSubmit}>
-            <input
-              ref={newTodoFieldRef}
-              data-cy="NewTodoField"
-              type="text"
-              className="todoapp__new-todo"
-              placeholder="What needs to be done?"
-              value={title}
-              disabled={isAdding}
-              autoFocus
-              onChange={handleTitleChange}
-            />
-          </form>
-        </header>
+            {newTodo}
+          </header>
+        ) : (
+          newTodo
+        )}
 
         {(visibleTodos.length > 0 || tempTodo) && (
           <TodoList

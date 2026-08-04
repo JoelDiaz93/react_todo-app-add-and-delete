@@ -1,3 +1,4 @@
+import PropTypes from 'prop-types';
 import type { FC } from 'react';
 import type { Todo } from '../types/Todo';
 import { TodoItem } from './TodoItem';
@@ -25,6 +26,25 @@ export const TodoList: FC<Props> = ({
       />
     ))}
 
-    {tempTodo && <TodoItem todo={tempTodo} isProcessing />}
+    {tempTodo && <TodoItem key="temp" todo={tempTodo} isProcessing />}
   </section>
 );
+
+TodoList.propTypes = {
+  todos: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.number.isRequired,
+      userId: PropTypes.number.isRequired,
+      title: PropTypes.string.isRequired,
+      completed: PropTypes.bool.isRequired,
+    }).isRequired,
+  ).isRequired,
+  processingTodoIds: PropTypes.arrayOf(PropTypes.number.isRequired).isRequired,
+  tempTodo: PropTypes.shape({
+    id: PropTypes.number.isRequired,
+    userId: PropTypes.number.isRequired,
+    title: PropTypes.string.isRequired,
+    completed: PropTypes.bool.isRequired,
+  }),
+  onDelete: PropTypes.func.isRequired,
+};
